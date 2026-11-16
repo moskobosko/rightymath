@@ -33,4 +33,4 @@ node test/run.js
 ```
 
 ## License
-MIT
+Released under the [MIT License](LICENSE). Free to use, modify and share, as long as the copyright notice is kept.
