@@ -1,0 +1,71 @@
+/* RightyMath */
+
+/* Editor lines: alignment follows each line's own direction. */
+.rightymath .markdown-source-view .cm-line.rym-rtl { direction: rtl; text-align: start; }
+.rightymath .markdown-source-view .cm-line.rym-ltr { direction: ltr; text-align: start; }
+
+/* Raw $...$ source in the editor: one LTR island inside the Hebrew line. */
+.rightymath .rym-math-src {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Rendered math (live preview + reading view + embeds): always LTR, isolated. */
+.rightymath .math,
+.rightymath mjx-container {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Display math stays centered no matter the paragraph direction. */
+.rightymath .math-block,
+.rightymath mjx-container[display="true"] {
+  direction: ltr;
+  text-align: center;
+}
+
+/* Hebrew inside \text{...} keeps its own natural order. */
+.rightymath mjx-utext {
+  unicode-bidi: plaintext;
+}
+
+/* Code is always LTR. */
+.rightymath .markdown-rendered code,
+.rightymath .markdown-rendered pre {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Reading view: alignment follows dir set per block. */
+.rightymath .markdown-rendered [dir="rtl"] { text-align: start; }
+.rightymath .markdown-rendered [dir="ltr"] { text-align: start; }
+.rightymath .markdown-rendered .math-block[dir] { text-align: center; }
+
+/* Status bar indicator */
+.rym-status { color: var(--text-accent); font-weight: 600; }
+.rym-status.rym-hidden { display: none; }
+
+/* Live preview for inline math */
+.rym-inline-preview {
+  direction: ltr;
+  text-align: center;
+  user-select: none;
+  cursor: default;
+}
+.rym-inline-preview.rym-below {
+  padding: 0.35em 0 0.5em;
+  margin: 0.1em 0 0.25em;
+  border-top: 1px dashed var(--background-modifier-border);
+  color: var(--text-normal);
+}
+.cm-tooltip:has(> .rym-popup) {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 6px);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+}
+.rym-inline-preview.rym-popup {
+  padding: 0.4em 0.7em;
+  margin-top: 0.3em;
+}
+.rym-inline-preview mjx-container { margin: 0 !important; }
