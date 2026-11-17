@@ -4,6 +4,7 @@
   "version": "1.1.0",
   "minAppVersion": "1.4.0",
   "description": "RTL support for LaTeX math: Hebrew, Arabic and Persian text with formulas that stay left-to-right, live inline preview, and keyboard-layout fix inside math.",
-  "author": "Eyal",
+  "author": "moskobosko",
+  "authorUrl": "https://github.com/moskobosko",
   "isDesktopOnly": false
 }
