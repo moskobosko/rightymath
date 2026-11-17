@@ -1,45 +1,47 @@
 /* RightyMath */
 
 /* Editor lines: alignment follows each line's own direction. */
-.rightymath .markdown-source-view .cm-line.rym-rtl { direction: rtl; text-align: start; }
-.rightymath .markdown-source-view .cm-line.rym-ltr { direction: ltr; text-align: start; }
+.markdown-source-view .cm-line.rym-rtl { direction: rtl; text-align: start; }
+.markdown-source-view .cm-line.rym-ltr { direction: ltr; text-align: start; }
 
 /* Raw $...$ source in the editor: one LTR island inside the Hebrew line. */
-.rightymath .rym-math-src {
+.rym-math-src {
   direction: ltr;
   unicode-bidi: isolate;
 }
 
 /* Rendered math (live preview + reading view + embeds): always LTR, isolated. */
-.rightymath .math,
-.rightymath mjx-container {
+.markdown-rendered .math,
+.cm-editor .math,
+mjx-container {
   direction: ltr;
   unicode-bidi: isolate;
 }
 
 /* Display math stays centered no matter the paragraph direction. */
-.rightymath .math-block,
-.rightymath mjx-container[display="true"] {
+.markdown-rendered .math-block,
+.cm-editor .math-block,
+mjx-container[display="true"] {
   direction: ltr;
   text-align: center;
 }
 
 /* Hebrew inside \text{...} keeps its own natural order. */
-.rightymath mjx-utext {
+mjx-utext {
   unicode-bidi: plaintext;
 }
 
 /* Code is always LTR. */
-.rightymath .markdown-rendered code,
-.rightymath .markdown-rendered pre {
+.markdown-rendered code,
+.markdown-rendered pre {
   direction: ltr;
   unicode-bidi: isolate;
 }
 
 /* Reading view: alignment follows dir set per block. */
-.rightymath .markdown-rendered [dir="rtl"] { text-align: start; }
-.rightymath .markdown-rendered [dir="ltr"] { text-align: start; }
-.rightymath .markdown-rendered .math-block[dir] { text-align: center; }
+.markdown-rendered [dir="rtl"] { text-align: start; }
+.markdown-rendered [dir="ltr"] { text-align: start; }
+.markdown-rendered .math-block[dir] { text-align: center; }
 
 /* Status bar indicator */
 .rym-status { color: var(--text-accent); font-weight: 600; }

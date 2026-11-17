@@ -7,7 +7,18 @@ Module._load = function (req, ...a) {
   if (req === '@codemirror/state') return { StateField: { define: () => ({}) }, StateEffect: { define: () => ({ of: () => ({}) }) } };
   return orig.call(this, req, ...a);
 };
-const T = require('../main.js').__test;
+// Load main.js without a test-only export: compile it with an extra line that
+// exposes the pure helpers to this harness.
+const fs = require('fs'), path = require('path');
+const T = (() => {
+  const file = path.join(__dirname, '..', 'main.js');
+  const m = new Module(file, module);
+  m.filename = file; m.paths = Module._nodeModulePaths(path.dirname(file));
+  m._compile(fs.readFileSync(file, 'utf8') + `
+;module.exports = { scanDoc, classifyLine, firstStrongDir, cleanMarkdown, isInMath, mathContentStart,
+  cursorInTextGroup, isForeignLetter, pendingInlineMath, withPending, currentInlineFormula, US_KEYS, LINE_PREFIX_RE };`, file);
+  return m.exports;
+})();
 let fail = 0;
 const eq = (name, got, want) => { const ok = JSON.stringify(got) === JSON.stringify(want); if (!ok) fail++; console.log((ok ? 'PASS ' : 'FAIL ') + name + (ok ? '' : `  got=${JSON.stringify(got)} want=${JSON.stringify(want)}`)); };
 

@@ -21,7 +21,10 @@ Supported RTL scripts: Hebrew, Arabic (incl. Persian, Urdu), Syriac, Thaana, N'K
 - Toggle per-line auto direction
 
 ## Install
-Copy `manifest.json`, `main.js` and `styles.css` to `<vault>/.obsidian/plugins/rightymath/`, then enable **RightyMath** in Settings → Community plugins.
+- **With BRAT (beta):** install the [BRAT](https://obsidian.md/plugins?id=obsidian42-brat) plugin, choose "Add beta plugin", and enter `moskobosko/rightymath`.
+- **Manually:** download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/moskobosko/rightymath/releases/latest) into `<vault>/.obsidian/plugins/rightymath/`, then enable **RightyMath** in Settings → Community plugins.
+
+Requires Obsidian 1.15.1 or later.
 
 Tip: leave Obsidian's global "Right-to-left (RTL)" editor setting **off**. RightyMath handles direction per line.
 

@@ -1,9 +1,9 @@
 {
   "id": "rightymath",
   "name": "RightyMath",
-  "version": "1.1.0",
-  "minAppVersion": "1.4.0",
-  "description": "RTL support for LaTeX math: Hebrew, Arabic and Persian text with formulas that stay left-to-right, live inline preview, and keyboard-layout fix inside math.",
+  "version": "1.1.1",
+  "minAppVersion": "1.15.1",
+  "description": "Write Hebrew, Arabic and other RTL text with LaTeX math. Formulas stay left-to-right, each line gets the right direction, and inline math gets a live preview and a keyboard layout fix.",
   "author": "moskobosko",
   "authorUrl": "https://github.com/moskobosko",
   "isDesktopOnly": false

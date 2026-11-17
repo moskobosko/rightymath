@@ -22,7 +22,7 @@
 const obsidian = require('obsidian');
 const { Plugin, PluginSettingTab, Setting, MarkdownView } = obsidian;
 const { ViewPlugin, Decoration, EditorView, Direction, WidgetType, showTooltip } = require('@codemirror/view');
-const { StateField, StateEffect } = require('@codemirror/state');
+const { StateField } = require('@codemirror/state');
 
 // ---------------------------------------------------------------------------
 // Direction detection
@@ -404,8 +404,6 @@ const DEFAULT_SETTINGS = {
 // Live settings object, shared with state fields (set in onload).
 let SETTINGS = Object.assign({}, DEFAULT_SETTINGS);
 
-const refreshEffect = StateEffect.define();
-
 const mathField = StateField.define({
   create: (state) => scanDoc(state.doc.toString()),
   update: (val, tr) => (tr.docChanged ? scanDoc(tr.newDoc.toString()) : val),
@@ -441,10 +439,7 @@ function renderMathInto(el, src) {
 }
 
 function makePreviewDom(src, cls) {
-  const el = document.createElement('div');
-  el.className = 'rym-inline-preview ' + cls;
-  el.setAttribute('dir', 'ltr');
-  el.setAttribute('contenteditable', 'false');
+  const el = createDiv({ cls: 'rym-inline-preview ' + cls, attr: { dir: 'ltr', contenteditable: 'false' } });
   renderMathInto(el, src);
   return el;
 }
@@ -480,17 +475,18 @@ function computePreview(state, prev) {
   };
 }
 
-const previewField = StateField.define({
-  create: (state) => computePreview(state, null),
-  update: (val, tr) => {
-    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(refreshEffect))) return computePreview(tr.state, val);
-    return val;
-  },
-  provide: (f) => [
-    EditorView.decorations.from(f, (v) => v.deco),
-    showTooltip.from(f, (v) => v.tooltip),
-  ],
-});
+// Created per editor-extension build, so a settings change (which rebuilds the
+// extension) starts it fresh with the new settings.
+function makePreviewField() {
+  return StateField.define({
+    create: (state) => computePreview(state, null),
+    update: (val, tr) => ((tr.docChanged || tr.selection) ? computePreview(tr.state, val) : val),
+    provide: (f) => [
+      EditorView.decorations.from(f, (v) => v.deco),
+      showTooltip.from(f, (v) => v.tooltip),
+    ],
+  });
+}
 
 const LINE_RTL = Decoration.line({ attributes: { dir: 'rtl' }, class: 'rym-rtl' });
 const LINE_LTR = Decoration.line({ attributes: { dir: 'ltr' }, class: 'rym-ltr' });
@@ -507,14 +503,15 @@ class RightyMathPlugin extends Plugin {
     SETTINGS = this.settings;
     this.foreignLayout = false;
     if (obsidian.loadMathJax) obsidian.loadMathJax().catch(() => {});
-    document.body.classList.add('rightymath');
 
     this.statusEl = this.addStatusBarItem();
     this.statusEl.addClass('rym-status');
     this.statusEl.setAttribute('aria-label', 'Cursor is inside math (non-English keys are converted to English)');
     this.setStatus(false);
 
-    this.registerEditorExtension(this.buildEditorExtension());
+    // Kept as one array so settings changes can swap its content (see refreshAll).
+    this.editorExtension = [this.buildEditorExtension()];
+    this.registerEditorExtension(this.editorExtension);
 
     this.registerMarkdownPostProcessor((el) => {
       if (this.settings.readingAutoDirection) fixRendered(el, this.settings.fallbackDirection);
@@ -524,22 +521,19 @@ class RightyMathPlugin extends Plugin {
     this.addSettingTab(new RightyMathSettingTab(this.app, this));
   }
 
-  onunload() {
-    document.body.classList.remove('rightymath');
-  }
-
   async saveSettings() {
     await this.saveData(this.settings);
     this.refreshAll();
   }
 
   refreshAll() {
+    // Rebuild the editor extension in place and let Obsidian reconfigure all editors.
+    this.editorExtension.length = 0;
+    this.editorExtension.push(this.buildEditorExtension());
+    this.app.workspace.updateOptions();
     this.app.workspace.iterateAllLeaves((leaf) => {
       const v = leaf.view;
-      if (!(v instanceof MarkdownView)) return;
-      const cm = v.editor && v.editor.cm;
-      if (cm) cm.dispatch({ effects: refreshEffect.of(null) });
-      if (v.previewMode && v.previewMode.rerender) v.previewMode.rerender(true);
+      if (v instanceof MarkdownView && v.previewMode) v.previewMode.rerender(true);
     });
     if (!this.settings.statusBarIndicator) this.setStatus(false);
   }
@@ -569,7 +563,6 @@ class RightyMathPlugin extends Plugin {
       }
 
       update(u) {
-        const refresh = u.transactions.some((t) => t.effects.some((e) => e.is(refreshEffect)));
         let pendingChanged = false;
         if (u.docChanged || u.selectionSet) {
           const p = this.computePending(u.state);
@@ -577,7 +570,7 @@ class RightyMathPlugin extends Plugin {
           pendingChanged = !p !== !old || (p && (p.from !== old.from || p.to !== old.to));
           this.pending = p;
         }
-        if (u.docChanged || u.viewportChanged || refresh || pendingChanged) this.build(u.view);
+        if (u.docChanged || u.viewportChanged || pendingChanged) this.build(u.view);
         if (u.selectionSet || u.docChanged || u.focusChanged) {
           if (u.view.hasFocus) {
             const st = u.view.state;
@@ -641,7 +634,7 @@ class RightyMathPlugin extends Plugin {
 
     const exts = [
       mathField,
-      previewField,
+      makePreviewField(),
       vp,
       EditorView.domEventHandlers({ keydown: (e, view) => plugin.handleKeydown(e, view) }),
     ];
@@ -788,7 +781,5 @@ class RightyMathSettingTab extends PluginSettingTab {
   }
 }
 
-// Exposed for unit tests only.
-RightyMathPlugin.__test = { scanDoc, classifyLine, firstStrongDir, cleanMarkdown, isInMath, mathContentStart, cursorInTextGroup, isForeignLetter, pendingInlineMath, withPending, currentInlineFormula, US_KEYS, LINE_PREFIX_RE };
 
 module.exports = RightyMathPlugin;
