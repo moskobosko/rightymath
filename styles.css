@@ -13,7 +13,7 @@
 /* Rendered math (live preview + reading view + embeds): always LTR, isolated. */
 .markdown-rendered .math,
 .cm-editor .math,
-mjx-container {
+.MathJax {
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -21,13 +21,13 @@ mjx-container {
 /* Display math stays centered no matter the paragraph direction. */
 .markdown-rendered .math-block,
 .cm-editor .math-block,
-mjx-container[display="true"] {
+.MathJax[display="true"] {
   direction: ltr;
   text-align: center;
 }
 
-/* Hebrew inside \text{...} keeps its own natural order. */
-mjx-utext {
+/* RTL text inside \text{...} keeps its own natural order (MathJax marks text runs with [variant]). */
+.MathJax [variant] {
   unicode-bidi: plaintext;
 }
 
@@ -60,7 +60,7 @@ mjx-utext {
   border-top: 1px dashed var(--background-modifier-border);
   color: var(--text-normal);
 }
-.cm-tooltip:has(> .rym-popup) {
+.cm-tooltip.rym-tooltip {
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s, 6px);
   background: var(--background-primary);
@@ -70,4 +70,3 @@ mjx-utext {
   padding: 0.4em 0.7em;
   margin-top: 0.3em;
 }
-.rym-inline-preview mjx-container { margin: 0 !important; }

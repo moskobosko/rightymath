@@ -465,7 +465,15 @@ function computePreview(state, prev) {
     const src = f.src;
     return {
       deco: Decoration.none, src, pos: f.from,
-      tooltip: { pos: f.from, above: false, create: () => ({ dom: makePreviewDom(src, 'rym-popup') }) },
+      tooltip: {
+        pos: f.from,
+        above: false,
+        create: () => {
+          const dom = makePreviewDom(src, 'rym-popup');
+          // Style the tooltip wrapper by class (avoids a :has() selector in CSS).
+          return { dom, mount: () => { if (dom.parentElement) dom.parentElement.classList.add('rym-tooltip'); } };
+        },
+      },
     };
   }
   const lineEnd = state.doc.lineAt(f.to).to;
