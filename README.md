@@ -8,6 +8,7 @@
 - **Formulas are LTR islands.** Raw `$...$` source and rendered math are both bidi isolates, so punctuation and words next to a formula stay where they belong. This also holds while you're still typing an unclosed `$`. Display math stays centered.
 - **Live inline preview.** While the cursor is inside `$...$`, the rendered formula shows under the line (like Obsidian's `$$` preview), or as a floating popup.
 - **Keyboard layout fix inside math.** If you forget to switch to English, keys typed inside a formula on a non-Latin layout (Hebrew, Arabic, Persian, Russian, Greek…) become the English character of the same key. `\text{...}` is left alone, so you can still write words in your language there. A `∑ math · EN` status-bar indicator shows when you're inside a formula.
+- **LaTeX autocomplete.** Type `\` inside math and get a list of about 240 commands (`\blacksquare`, `\infty`, `\frac`, Greek letters, arrows, environments…), each with its rendered symbol. Search by name or by keyword (`qed`, `box`, `arrow`). ↑/↓ to pick, Enter or Tab to insert; templates like `\frac{}{}` put the cursor in the first brace.
 - **RTL text inside `\text{...}`** keeps its natural order.
 - **Reading view** gets the same per-block direction (paragraphs, lists, headings, tables, callouts).
 
@@ -34,6 +35,8 @@ No build step: `main.js` is plain CommonJS. Run the logic tests with:
 ```
 node test/run.js
 ```
+
+To check that every autocomplete entry renders in MathJax 4, install `@mathjax/src@4` anywhere and run `MATHJAX_DIR=<folder>/node_modules/@mathjax/src node test/latex.js`.
 
 ## License
 Released under the [MIT License](LICENSE). Free to use, modify and share, as long as the copyright notice is kept.

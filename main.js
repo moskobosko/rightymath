@@ -398,6 +398,7 @@ const DEFAULT_SETTINGS = {
   fallbackDirection: 'rtl',
   keyboardFix: true,
   statusBarIndicator: true,
+  latexAutocomplete: true,
   inlinePreview: 'below', // 'below' | 'popup' | 'off'
 };
 
@@ -450,6 +451,390 @@ class MathPreviewWidget extends WidgetType {
   toDOM() { return makePreviewDom(this.src, 'rym-below'); }
   updateDOM(dom) { renderMathInto(dom, this.src); return true; } // re-render in place, no flicker
   ignoreEvent() { return false; }
+}
+
+// ---------------------------------------------------------------------------
+// LaTeX command autocomplete (inside math only)
+// ---------------------------------------------------------------------------
+
+/*
+ * One command per line:  name ;; insert ;; preview ;; description ;; keywords
+ *  - insert:  text that replaces "\query"; "@" marks where the cursor goes.
+ *             Empty = "\name".
+ *  - preview: what is rendered in the popup. Empty = the insert text (without "@").
+ *  - keywords: extra words you can type to find it (e.g. "\box" finds \square).
+ * Every entry is checked against MathJax 4 with Obsidian's packages (test/latex.mjs).
+ */
+const LATEX_COMMANDS_SRC = String.raw`
+frac ;; \frac{@}{} ;; \frac{a}{b} ;; Fraction ;; divide over
+dfrac ;; \dfrac{@}{} ;; \dfrac{a}{b} ;; Display-size fraction ;; fraction
+tfrac ;; \tfrac{@}{} ;; \tfrac{a}{b} ;; Text-size fraction ;; fraction
+sqrt ;; \sqrt{@} ;; \sqrt{x} ;; Square root ;; root radical
+sqrt ;; \sqrt[@]{} ;; \sqrt[n]{x} ;; n-th root ;; root radical nth
+binom ;; \binom{@}{} ;; \binom{n}{k} ;; Binomial coefficient ;; choose combination
+sum ;; \sum_{@}^{} ;; \sum_{i=1}^{n} ;; Sum with limits ;; sigma series
+sum ;; \sum ;; \sum ;; Sum ;; sigma series
+prod ;; \prod_{@}^{} ;; \prod_{i=1}^{n} ;; Product with limits ;; pi
+coprod ;; \coprod ;; \coprod ;; Coproduct ;;
+int ;; \int_{@}^{} ;; \int_{a}^{b} ;; Integral with limits ;; integral
+int ;; \int ;; \int ;; Integral ;; integral
+iint ;; \iint ;; \iint ;; Double integral ;; integral
+iiint ;; \iiint ;; \iiint ;; Triple integral ;; integral
+oint ;; \oint ;; \oint ;; Contour integral ;; integral closed
+lim ;; \lim_{@ \to } ;; \lim_{x \to \infty} ;; Limit ;; limit
+limsup ;; \limsup_{@} ;; \limsup_{n} ;; Limit superior ;; limit
+liminf ;; \liminf_{@} ;; \liminf_{n} ;; Limit inferior ;; limit
+sup ;; \sup ;; \sup ;; Supremum ;;
+inf ;; \inf ;; \inf ;; Infimum ;;
+max ;; \max ;; \max ;; Maximum ;;
+min ;; \min ;; \min ;; Minimum ;;
+bigcup ;; \bigcup_{@} ;; \bigcup_{i} ;; Big union ;; union
+bigcap ;; \bigcap_{@} ;; \bigcap_{i} ;; Big intersection ;; intersection
+bigoplus ;; \bigoplus ;; \bigoplus ;; Big direct sum ;;
+bigotimes ;; \bigotimes ;; \bigotimes ;; Big tensor product ;;
+infty ;; \infty ;; \infty ;; Infinity ;; infinity
+partial ;; \partial ;; \partial ;; Partial derivative ;; derivative
+nabla ;; \nabla ;; \nabla ;; Nabla / gradient ;; gradient del
+blacksquare ;; \blacksquare ;; \blacksquare ;; Filled square (end of proof) ;; qed proof box
+square ;; \square ;; \square ;; Empty square ;; box qed
+Box ;; \Box ;; \Box ;; Box ;; square qed
+qed ;; \blacksquare ;; \blacksquare ;; End of proof ∎ ;; proof box square
+therefore ;; \therefore ;; \therefore ;; Therefore ∴ ;; so
+because ;; \because ;; \because ;; Because ∵ ;;
+checkmark ;; \checkmark ;; \checkmark ;; Check mark ;; tick
+alpha ;; \alpha ;; \alpha ;; Greek alpha ;; greek
+beta ;; \beta ;; \beta ;; Greek beta ;; greek
+gamma ;; \gamma ;; \gamma ;; Greek gamma ;; greek
+Gamma ;; \Gamma ;; \Gamma ;; Greek capital Gamma ;; greek
+delta ;; \delta ;; \delta ;; Greek delta ;; greek
+Delta ;; \Delta ;; \Delta ;; Greek capital Delta ;; greek
+epsilon ;; \epsilon ;; \epsilon ;; Greek epsilon ;; greek
+varepsilon ;; \varepsilon ;; \varepsilon ;; Greek epsilon (variant) ;; greek epsilon
+zeta ;; \zeta ;; \zeta ;; Greek zeta ;; greek
+eta ;; \eta ;; \eta ;; Greek eta ;; greek
+theta ;; \theta ;; \theta ;; Greek theta ;; greek
+vartheta ;; \vartheta ;; \vartheta ;; Greek theta (variant) ;; greek theta
+Theta ;; \Theta ;; \Theta ;; Greek capital Theta ;; greek
+iota ;; \iota ;; \iota ;; Greek iota ;; greek
+kappa ;; \kappa ;; \kappa ;; Greek kappa ;; greek
+lambda ;; \lambda ;; \lambda ;; Greek lambda ;; greek
+Lambda ;; \Lambda ;; \Lambda ;; Greek capital Lambda ;; greek
+mu ;; \mu ;; \mu ;; Greek mu ;; greek
+nu ;; \nu ;; \nu ;; Greek nu ;; greek
+xi ;; \xi ;; \xi ;; Greek xi ;; greek
+Xi ;; \Xi ;; \Xi ;; Greek capital Xi ;; greek
+pi ;; \pi ;; \pi ;; Greek pi ;; greek
+Pi ;; \Pi ;; \Pi ;; Greek capital Pi ;; greek
+rho ;; \rho ;; \rho ;; Greek rho ;; greek
+varrho ;; \varrho ;; \varrho ;; Greek rho (variant) ;; greek rho
+sigma ;; \sigma ;; \sigma ;; Greek sigma ;; greek
+Sigma ;; \Sigma ;; \Sigma ;; Greek capital Sigma ;; greek
+tau ;; \tau ;; \tau ;; Greek tau ;; greek
+upsilon ;; \upsilon ;; \upsilon ;; Greek upsilon ;; greek
+phi ;; \phi ;; \phi ;; Greek phi ;; greek
+varphi ;; \varphi ;; \varphi ;; Greek phi (variant) ;; greek phi
+Phi ;; \Phi ;; \Phi ;; Greek capital Phi ;; greek
+chi ;; \chi ;; \chi ;; Greek chi ;; greek
+psi ;; \psi ;; \psi ;; Greek psi ;; greek
+Psi ;; \Psi ;; \Psi ;; Greek capital Psi ;; greek
+omega ;; \omega ;; \omega ;; Greek omega ;; greek
+Omega ;; \Omega ;; \Omega ;; Greek capital Omega ;; greek
+aleph ;; \aleph ;; \aleph ;; Aleph (cardinality) ;; hebrew cardinal
+hbar ;; \hbar ;; \hbar ;; Reduced Planck constant ;; planck
+ell ;; \ell ;; \ell ;; Script l ;;
+Re ;; \Re ;; \Re ;; Real part ;; real
+Im ;; \Im ;; \Im ;; Imaginary part ;; imaginary
+cdot ;; \cdot ;; a \cdot b ;; Centered dot (multiply) ;; times multiply dot
+times ;; \times ;; a \times b ;; Times / cross product ;; multiply cross
+div ;; \div ;; a \div b ;; Division sign ;; divide
+pm ;; \pm ;; \pm ;; Plus-minus ;; plusminus
+mp ;; \mp ;; \mp ;; Minus-plus ;;
+ast ;; \ast ;; \ast ;; Asterisk ;; star
+star ;; \star ;; \star ;; Star ;;
+circ ;; \circ ;; f \circ g ;; Composition ;; compose ring
+bullet ;; \bullet ;; \bullet ;; Bullet ;; dot
+oplus ;; \oplus ;; \oplus ;; Direct sum ;; xor
+otimes ;; \otimes ;; \otimes ;; Tensor product ;;
+odot ;; \odot ;; \odot ;; Circled dot ;;
+cup ;; \cup ;; A \cup B ;; Union ;; union or
+cap ;; \cap ;; A \cap B ;; Intersection ;; intersection and
+setminus ;; \setminus ;; A \setminus B ;; Set difference ;; minus difference
+wedge ;; \wedge ;; \wedge ;; Logical and ;; and land
+vee ;; \vee ;; \vee ;; Logical or ;; or lor
+land ;; \land ;; \land ;; Logical and ;; and wedge
+lor ;; \lor ;; \lor ;; Logical or ;; or vee
+neg ;; \neg ;; \neg ;; Logical not ;; not lnot
+lnot ;; \lnot ;; \lnot ;; Logical not ;; not neg
+leq ;; \leq ;; \leq ;; Less than or equal ;; le smaller
+geq ;; \geq ;; \geq ;; Greater than or equal ;; ge bigger
+le ;; \le ;; \le ;; Less than or equal ;; leq
+ge ;; \ge ;; \ge ;; Greater than or equal ;; geq
+neq ;; \neq ;; \neq ;; Not equal ;; ne different
+ne ;; \ne ;; \ne ;; Not equal ;; neq
+approx ;; \approx ;; \approx ;; Approximately ;; about
+equiv ;; \equiv ;; \equiv ;; Equivalent / congruent ;; identical
+sim ;; \sim ;; \sim ;; Similar / distributed as ;; tilde
+simeq ;; \simeq ;; \simeq ;; Asymptotically equal ;;
+cong ;; \cong ;; \cong ;; Congruent / isomorphic ;; isomorphic
+propto ;; \propto ;; \propto ;; Proportional to ;; proportional
+ll ;; \ll ;; \ll ;; Much less than ;;
+gg ;; \gg ;; \gg ;; Much greater than ;;
+coloneqq ;; \coloneqq ;; \coloneqq ;; Defined as := ;; define assign
+triangleq ;; \triangleq ;; \triangleq ;; Defined as (triangle) ;; define
+in ;; \in ;; x \in A ;; Element of ;; belongs member
+notin ;; \notin ;; x \notin A ;; Not an element of ;; not member
+ni ;; \ni ;; \ni ;; Contains as element ;; owns
+subset ;; \subset ;; \subset ;; Subset ;; contained
+subseteq ;; \subseteq ;; \subseteq ;; Subset or equal ;; contained
+subsetneq ;; \subsetneq ;; \subsetneq ;; Proper subset ;; strict contained
+supset ;; \supset ;; \supset ;; Superset ;; contains
+supseteq ;; \supseteq ;; \supseteq ;; Superset or equal ;; contains
+emptyset ;; \emptyset ;; \emptyset ;; Empty set ;; empty null
+varnothing ;; \varnothing ;; \varnothing ;; Empty set (round) ;; empty null emptyset
+forall ;; \forall ;; \forall ;; For all ;; every any
+exists ;; \exists ;; \exists ;; There exists ;; some
+nexists ;; \nexists ;; \nexists ;; There does not exist ;; exists not
+mid ;; \mid ;; a \mid b ;; Divides / such that ;; divides bar
+nmid ;; \nmid ;; a \nmid b ;; Does not divide ;; divides
+perp ;; \perp ;; \perp ;; Perpendicular ;; orthogonal
+parallel ;; \parallel ;; \parallel ;; Parallel ;;
+angle ;; \angle ;; \angle ;; Angle ;;
+triangle ;; \triangle ;; \triangle ;; Triangle ;;
+degree ;; \degree ;; 90\degree ;; Degree sign ° ;; deg angle
+models ;; \models ;; \models ;; Models / entails ;; entails
+vdash ;; \vdash ;; \vdash ;; Proves ;; turnstile
+top ;; \top ;; \top ;; Top / true ;; true
+bot ;; \bot ;; \bot ;; Bottom / false ;; false
+to ;; \to ;; \to ;; Right arrow (maps to) ;; arrow right
+rightarrow ;; \rightarrow ;; \rightarrow ;; Right arrow ;; arrow to
+leftarrow ;; \leftarrow ;; \leftarrow ;; Left arrow ;; arrow gets
+leftrightarrow ;; \leftrightarrow ;; \leftrightarrow ;; Left-right arrow ;; arrow
+Rightarrow ;; \Rightarrow ;; \Rightarrow ;; Implies (double arrow) ;; arrow implies
+Leftarrow ;; \Leftarrow ;; \Leftarrow ;; Implied by (double arrow) ;; arrow
+Leftrightarrow ;; \Leftrightarrow ;; \Leftrightarrow ;; If and only if (double arrow) ;; arrow iff
+implies ;; \implies ;; \implies ;; Implies ⟹ ;; arrow then
+impliedby ;; \impliedby ;; \impliedby ;; Implied by ⟸ ;; arrow
+iff ;; \iff ;; \iff ;; If and only if ⟺ ;; arrow equivalent
+mapsto ;; \mapsto ;; x \mapsto y ;; Maps to ;; arrow function
+longrightarrow ;; \longrightarrow ;; \longrightarrow ;; Long right arrow ;; arrow
+longmapsto ;; \longmapsto ;; \longmapsto ;; Long maps to ;; arrow
+hookrightarrow ;; \hookrightarrow ;; \hookrightarrow ;; Injection arrow ;; arrow injective
+twoheadrightarrow ;; \twoheadrightarrow ;; \twoheadrightarrow ;; Surjection arrow ;; arrow surjective onto
+uparrow ;; \uparrow ;; \uparrow ;; Up arrow ;; arrow increasing
+downarrow ;; \downarrow ;; \downarrow ;; Down arrow ;; arrow decreasing
+xrightarrow ;; \xrightarrow{@} ;; \xrightarrow{f} ;; Arrow with label ;; arrow label
+ldots ;; \ldots ;; 1, \ldots, n ;; Low dots … ;; dots ellipsis
+cdots ;; \cdots ;; 1 + \cdots + n ;; Centered dots ⋯ ;; dots ellipsis
+vdots ;; \vdots ;; \vdots ;; Vertical dots ;; dots ellipsis
+ddots ;; \ddots ;; \ddots ;; Diagonal dots ;; dots ellipsis
+dots ;; \dots ;; \dots ;; Dots ;; ellipsis
+langle ;; \langle ;; \langle ;; Left angle bracket ;; bracket inner
+rangle ;; \rangle ;; \rangle ;; Right angle bracket ;; bracket
+lfloor ;; \lfloor ;; \lfloor ;; Left floor ;; floor
+rfloor ;; \rfloor ;; \rfloor ;; Right floor ;; floor
+lceil ;; \lceil ;; \lceil ;; Left ceiling ;; ceil
+rceil ;; \rceil ;; \rceil ;; Right ceiling ;; ceil
+lvert ;; \lvert ;; \lvert ;; Left bar (abs) ;; abs
+rvert ;; \rvert ;; \rvert ;; Right bar (abs) ;; abs
+left ;; \left( @ \right) ;; \left( \frac{a}{b} \right) ;; Auto-size parentheses ;; paren bracket
+left ;; \left[ @ \right] ;; \left[ \frac{a}{b} \right] ;; Auto-size square brackets ;; bracket
+left ;; \left\{ @ \right\} ;; \left\{ \frac{a}{b} \right\} ;; Auto-size braces ;; brace set
+left ;; \left| @ \right| ;; \left| \frac{a}{b} \right| ;; Auto-size absolute value ;; abs bars
+left ;; \left\langle @ \right\rangle ;; \left\langle u, v \right\rangle ;; Auto-size angle brackets ;; inner product
+lfloor ;; \lfloor @ \rfloor ;; \lfloor x \rfloor ;; Floor of ;; floor
+lceil ;; \lceil @ \rceil ;; \lceil x \rceil ;; Ceiling of ;; ceil
+hat ;; \hat{@} ;; \hat{x} ;; Hat accent ;; accent
+bar ;; \bar{@} ;; \bar{x} ;; Bar accent ;; accent mean
+vec ;; \vec{@} ;; \vec{v} ;; Vector arrow ;; accent vector
+dot ;; \dot{@} ;; \dot{x} ;; Dot accent (derivative) ;; accent derivative
+ddot ;; \ddot{@} ;; \ddot{x} ;; Double dot accent ;; accent derivative
+tilde ;; \tilde{@} ;; \tilde{x} ;; Tilde accent ;; accent
+widehat ;; \widehat{@} ;; \widehat{xyz} ;; Wide hat ;; accent
+widetilde ;; \widetilde{@} ;; \widetilde{xyz} ;; Wide tilde ;; accent
+overline ;; \overline{@} ;; \overline{z} ;; Overline (conjugate) ;; conjugate bar
+underline ;; \underline{@} ;; \underline{x} ;; Underline ;;
+overrightarrow ;; \overrightarrow{@} ;; \overrightarrow{AB} ;; Vector over segment ;; vector arrow
+overbrace ;; \overbrace{@}^{} ;; \overbrace{a+b}^{n} ;; Brace above ;; brace
+underbrace ;; \underbrace{@}_{} ;; \underbrace{a+b}_{n} ;; Brace below ;; brace
+overset ;; \overset{@}{} ;; \overset{!}{=} ;; Symbol over another ;; stack above
+underset ;; \underset{@}{} ;; \underset{x}{\max} ;; Symbol under another ;; stack below
+cancel ;; \cancel{@} ;; \cancel{x} ;; Cross out ;; strike cross
+boxed ;; \boxed{@} ;; \boxed{x=1} ;; Box around answer ;; box answer frame
+mathbb ;; \mathbb{@} ;; \mathbb{R} ;; Blackboard bold (ℝ, ℕ, ℤ) ;; real natural integers sets
+mathcal ;; \mathcal{@} ;; \mathcal{F} ;; Calligraphic ;; script
+mathfrak ;; \mathfrak{@} ;; \mathfrak{g} ;; Fraktur ;; gothic
+mathbf ;; \mathbf{@} ;; \mathbf{v} ;; Bold ;; bold
+boldsymbol ;; \boldsymbol{@} ;; \boldsymbol{\alpha} ;; Bold symbol ;; bold
+mathrm ;; \mathrm{@} ;; \mathrm{d}x ;; Upright (roman) ;; roman upright
+mathit ;; \mathit{@} ;; \mathit{abc} ;; Italic ;; italic
+mathsf ;; \mathsf{@} ;; \mathsf{A} ;; Sans-serif ;; sans
+text ;; \text{@} ;; \text{if } x>0 ;; Text inside math ;; words
+operatorname ;; \operatorname{@} ;; \operatorname{rank} ;; Custom operator name ;; function
+color ;; \color{@}{} ;; \color{red}{x} ;; Colored text ;; colour red
+sin ;; \sin ;; \sin x ;; Sine ;; trig
+cos ;; \cos ;; \cos x ;; Cosine ;; trig
+tan ;; \tan ;; \tan x ;; Tangent ;; trig
+cot ;; \cot ;; \cot x ;; Cotangent ;; trig
+sec ;; \sec ;; \sec x ;; Secant ;; trig
+csc ;; \csc ;; \csc x ;; Cosecant ;; trig
+arcsin ;; \arcsin ;; \arcsin x ;; Arcsine ;; trig inverse
+arccos ;; \arccos ;; \arccos x ;; Arccosine ;; trig inverse
+arctan ;; \arctan ;; \arctan x ;; Arctangent ;; trig inverse
+sinh ;; \sinh ;; \sinh x ;; Hyperbolic sine ;; hyperbolic
+cosh ;; \cosh ;; \cosh x ;; Hyperbolic cosine ;; hyperbolic
+tanh ;; \tanh ;; \tanh x ;; Hyperbolic tangent ;; hyperbolic
+log ;; \log ;; \log x ;; Logarithm ;; log
+ln ;; \ln ;; \ln x ;; Natural logarithm ;; log
+exp ;; \exp ;; \exp x ;; Exponential ;; e
+det ;; \det ;; \det A ;; Determinant ;; matrix
+dim ;; \dim ;; \dim V ;; Dimension ;;
+ker ;; \ker ;; \ker T ;; Kernel ;; null
+gcd ;; \gcd ;; \gcd(a,b) ;; Greatest common divisor ;; divisor
+deg ;; \deg ;; \deg p ;; Degree (polynomial) ;; degree
+arg ;; \arg ;; \arg z ;; Argument ;;
+Pr ;; \Pr ;; \Pr(A) ;; Probability ;; probability
+bmod ;; \bmod ;; a \bmod n ;; Modulo (binary) ;; mod
+pmod ;; \pmod{@} ;; a \equiv b \pmod{n} ;; Modulo in parentheses ;; mod congruent
+begin ;; \begin{pmatrix} @ \end{pmatrix} ;; \begin{pmatrix} a & b \\ c & d \end{pmatrix} ;; Matrix (parentheses) ;; pmatrix matrix
+begin ;; \begin{bmatrix} @ \end{bmatrix} ;; \begin{bmatrix} a & b \\ c & d \end{bmatrix} ;; Matrix (square brackets) ;; bmatrix matrix
+begin ;; \begin{vmatrix} @ \end{vmatrix} ;; \begin{vmatrix} a & b \\ c & d \end{vmatrix} ;; Determinant matrix ;; vmatrix matrix det
+begin ;; \begin{cases} @ \end{cases} ;; f(x)=\begin{cases} 1 & x>0 \\ 0 & x\le 0 \end{cases} ;; Cases (piecewise) ;; cases piecewise
+begin ;; \begin{aligned} @ \end{aligned} ;; \begin{aligned} a&=b \\ &=c \end{aligned} ;; Aligned equations ;; aligned align
+quad ;; \quad ;; a \quad b ;; Wide space ;; space
+qquad ;; \qquad ;; a \qquad b ;; Very wide space ;; space
+displaystyle ;; \displaystyle ;; \displaystyle\sum_{i=1}^{n} ;; Display style (big operators inline) ;; big
+not ;; \not ;; \not\equiv ;; Negate next symbol ;; negate slash
+ce ;; \ce{@} ;; \ce{H2O} ;; Chemical formula ;; chemistry mhchem
+`;
+
+function parseLatexCommands(src) {
+  return src.split('\n').map((l) => l.trim()).filter(Boolean).map((l, i) => {
+    const [name, insert, preview, desc, keywords] = l.split(';;').map((s) => (s || '').trim());
+    const ins = insert || '\\' + name;
+    return {
+      name, insert: ins, preview: preview || ins.replace('@', ''), desc,
+      label: ins.replace(/@/, '…'), keywords: (keywords || '').split(/\s+/).filter(Boolean), order: i,
+    };
+  });
+}
+const LATEX_COMMANDS = parseLatexCommands(LATEX_COMMANDS_SRC);
+
+const POPULAR = ['frac', 'sqrt', 'sum', 'int', 'lim', 'infty', 'alpha', 'cdot', 'leq', 'geq', 'neq', 'in', 'mathbb', 'to', 'text', 'blacksquare'];
+
+/** Rank commands for what was typed after the backslash. */
+function rankLatexCommands(query, list = LATEX_COMMANDS, limit = 40) {
+  if (!query) {
+    const seen = new Set();
+    return POPULAR.map((n) => list.find((c) => c.name === n && !seen.has(n) && seen.add(n))).filter(Boolean);
+  }
+  const ql = query.toLowerCase();
+  const scored = [];
+  for (const c of list) {
+    const nl = c.name.toLowerCase();
+    let s = null;
+    if (c.name === query) s = 0;
+    else if (c.name.startsWith(query)) s = 1;
+    else if (nl.startsWith(ql)) s = 2;
+    else if (c.keywords.some((k) => k.startsWith(ql))) s = 3;
+    else if (nl.includes(ql)) s = 4;
+    else if (c.keywords.some((k) => k.includes(ql))) s = 5;
+    if (s !== null) scored.push([s, c]);
+  }
+  scored.sort((a, b) => a[0] - b[0] || a[1].name.length - b[1].name.length || a[1].order - b[1].order);
+  return scored.slice(0, limit).map((x) => x[1]);
+}
+
+/** If the text before the cursor ends in an unescaped "\letters", return the letters (may be ""). */
+function latexQueryBefore(lineBefore) {
+  const m = /\\([a-zA-Z]*)$/.exec(lineBefore);
+  if (!m) return null;
+  const bs = lineBefore.length - m[0].length;
+  // "\\" is a LaTeX line break, not the start of a command.
+  let k = bs - 1, slashes = 0;
+  while (k >= 0 && lineBefore[k] === '\\') { slashes++; k--; }
+  return slashes % 2 === 0 ? m[1] : null;
+}
+
+/** Minimal CodeMirror-like doc over a plain string (for the math scanner). */
+function stringDoc(text) {
+  return {
+    lineAt(p) {
+      const s = p === 0 ? 0 : text.lastIndexOf('\n', p - 1) + 1;
+      let e = text.indexOf('\n', p);
+      if (e < 0) e = text.length;
+      return { from: s, to: e, text: text.slice(s, e) };
+    },
+    sliceString: (a, b) => text.slice(a, b),
+  };
+}
+
+class LatexSuggest extends obsidian.EditorSuggest {
+  constructor(app, plugin) {
+    super(app);
+    this.plugin = plugin;
+    this.limit = 40;
+    this.setInstructions([
+      { command: '↑↓', purpose: 'to navigate' },
+      { command: '↵ / Tab', purpose: 'to insert' },
+      { command: 'esc', purpose: 'to dismiss' },
+    ]);
+    // Tab inserts too, like in code editors.
+    // (Uses the popup's internal list when present; otherwise Tab behaves normally.)
+    this.scope.register([], 'Tab', (evt) => {
+      const list = this.suggestions;
+      if (!this.context || !list || typeof list.useSelectedItem !== 'function') return true;
+      evt.preventDefault();
+      list.useSelectedItem(evt);
+      return false;
+    });
+  }
+
+  onTrigger(cursor, editor) {
+    if (!this.plugin.settings.latexAutocomplete) return null;
+    const before = editor.getLine(cursor.line).slice(0, cursor.ch);
+    const query = latexQueryBefore(before);
+    if (query === null) { this.justInserted = null; return null; }
+    // Don't reopen on the command we just inserted (e.g. "\infty" right after picking it).
+    const j = this.justInserted;
+    if (j && j.line === cursor.line && j.ch === cursor.ch && j.query === query) return null;
+    this.justInserted = null;
+    const text = editor.getValue();
+    const offset = editor.posToOffset(cursor);
+    if (!isInMath(scanDoc(text), stringDoc(text), offset)) return null;
+    return { start: { line: cursor.line, ch: cursor.ch - query.length - 1 }, end: cursor, query };
+  }
+
+  getSuggestions(ctx) {
+    return rankLatexCommands(ctx.query);
+  }
+
+  renderSuggestion(c, el) {
+    el.addClass('rym-suggest');
+    const sym = el.createDiv({ cls: 'rym-suggest-symbol', attr: { dir: 'ltr' } });
+    renderMathInto(sym, c.preview);
+    const body = el.createDiv({ cls: 'rym-suggest-body' });
+    body.createDiv({ cls: 'rym-suggest-name', text: c.label, attr: { dir: 'ltr' } });
+    if (c.desc) body.createDiv({ cls: 'rym-suggest-desc', text: c.desc });
+  }
+
+  selectSuggestion(c) {
+    const ctx = this.context;
+    if (!ctx) return;
+    const ed = ctx.editor;
+    const caret = c.insert.indexOf('@');
+    const text = c.insert.replace('@', '');
+    // Templates are single-line, so the final cursor is on the same line. Work it out and
+    // remember it *before* editing: the edit itself makes Obsidian re-check the trigger,
+    // and it must not reopen the popup on the command we just inserted.
+    const line = ed.getLine(ctx.start.line);
+    const newLine = line.slice(0, ctx.start.ch) + text + line.slice(ctx.end.ch);
+    const cur = { line: ctx.start.line, ch: ctx.start.ch + (caret < 0 ? text.length : caret) };
+    const tail = latexQueryBefore(newLine.slice(0, cur.ch));
+    this.justInserted = tail === null ? null : { line: cur.line, ch: cur.ch, query: tail };
+    ed.replaceRange(text, ctx.start, ctx.end);
+    ed.setCursor(cur);
+    this.close();
+  }
 }
 
 const EMPTY_PREVIEW = { deco: Decoration.none, tooltip: null, src: null, pos: -1 };
@@ -520,6 +905,8 @@ class RightyMathPlugin extends Plugin {
     // Kept as one array so settings changes can swap its content (see refreshAll).
     this.editorExtension = [this.buildEditorExtension()];
     this.registerEditorExtension(this.editorExtension);
+
+    this.registerEditorSuggest(new LatexSuggest(this.app, this));
 
     this.registerMarkdownPostProcessor((el) => {
       if (this.settings.readingAutoDirection) fixRendered(el, this.settings.fallbackDirection);
@@ -786,6 +1173,9 @@ class RightyMathSettingTab extends PluginSettingTab {
     toggle('Math indicator in status bar',
       'Shows "∑ math · EN" while the cursor is inside a formula.',
       'statusBarIndicator');
+    toggle('Autocomplete LaTeX commands',
+      'Inside math, typing \\ shows matching commands (\\frac, \\blacksquare, \\mathbb...) with a rendered preview. Enter or Tab inserts.',
+      'latexAutocomplete');
   }
 }
 

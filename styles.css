@@ -70,3 +70,31 @@
   padding: 0.4em 0.7em;
   margin-top: 0.3em;
 }
+
+/* LaTeX autocomplete popup */
+.rym-suggest {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-3);
+}
+.rym-suggest-symbol {
+  flex: 0 0 4.5em;
+  text-align: center;
+  direction: ltr;
+  overflow: hidden;
+}
+.rym-suggest-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rym-suggest-name {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+  direction: ltr;
+  text-align: left;
+}
+.rym-suggest-desc {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}

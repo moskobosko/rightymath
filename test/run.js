@@ -2,7 +2,7 @@ const Module = require('module');
 const orig = Module._load;
 const stubDeco = { line: () => ({ range: () => ({}) }), mark: () => ({ range: () => ({}) }), none: {}, set: () => ({}) };
 Module._load = function (req, ...a) {
-  if (req === 'obsidian') return { Plugin: class {}, PluginSettingTab: class {}, Setting: class {}, MarkdownView: class {} };
+  if (req === 'obsidian') return { Plugin: class {}, PluginSettingTab: class {}, Setting: class {}, MarkdownView: class {}, EditorSuggest: class { constructor(app) { this.app = app; this.scope = { register() {} }; } setInstructions() {} close() { this.closed = true; } } };
   if (req === '@codemirror/view') return { ViewPlugin: { fromClass: () => ({}) }, Decoration: stubDeco, EditorView: {}, WidgetType: class {}, showTooltip: { from: () => ({}) }, Direction: { LTR: 0, RTL: 1 } };
   if (req === '@codemirror/state') return { StateField: { define: () => ({}) }, StateEffect: { define: () => ({ of: () => ({}) }) } };
   return orig.call(this, req, ...a);
@@ -16,7 +16,8 @@ const T = (() => {
   m.filename = file; m.paths = Module._nodeModulePaths(path.dirname(file));
   m._compile(fs.readFileSync(file, 'utf8') + `
 ;module.exports = { scanDoc, classifyLine, firstStrongDir, cleanMarkdown, isInMath, mathContentStart,
-  cursorInTextGroup, isForeignLetter, pendingInlineMath, withPending, currentInlineFormula, US_KEYS, LINE_PREFIX_RE };`, file);
+  cursorInTextGroup, isForeignLetter, pendingInlineMath, withPending, currentInlineFormula, US_KEYS, LINE_PREFIX_RE,
+  LATEX_COMMANDS, rankLatexCommands, latexQueryBefore, stringDoc, LatexSuggest };`, file);
   return m.exports;
 })();
 let fail = 0;
@@ -69,4 +70,6 @@ eq('math-first then hebrew, typing 2nd formula', dirWhileTyping('$f$ היא $g(x
 eq('pending does not break existing math', T.withPending(T.scanDoc('$a$ ו $b'), { from: 6, to: 8 }).math.map(r => [r.from, r.to]), [[0, 3], [6, 8]]);
 eval(require('fs').readFileSync(__dirname + '/extra.js', 'utf8'));
 eval(require('fs').readFileSync(__dirname + '/keyboard.js', 'utf8'));
+eval(require('fs').readFileSync(__dirname + '/autocomplete.js', 'utf8'));
+eval(require('fs').readFileSync(__dirname + '/suggest-flow.js', 'utf8'));
 console.log(fail ? `${fail} FAILED` : 'ALL PASSED'); process.exit(fail ? 1 : 0);
